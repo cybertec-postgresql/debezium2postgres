@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
+	"github.com/Shopify/sarama"
 	kafka "github.com/segmentio/kafka-go"
 )
 
@@ -21,51 +21,46 @@ func getKafkaReader(kafkaURL, topic string) *kafka.Reader {
 	})
 }
 
-func main() {
-	// to consume messages
-	topic := "dbserver1.inventory.customers"
-	partition := 0
+func getTopics(brokers []string) ([]string, error) {
+	config := sarama.NewConfig()
+	config.Consumer.Return.Errors = true
 
-	conn, err := kafka.DialLeader(context.Background(), "tcp", "10.0.1.112:9092", topic, partition)
+	//get broker
+	cluster, err := sarama.NewConsumer(brokers, config)
 	if err != nil {
-		log.Fatal("failed to dial leader:", err)
+		return nil, err
+	}
+	defer cluster.Close()
+
+	//get all topic from cluster
+	return cluster.Topics()
+}
+
+func main() {
+	kafkaURL := "10.0.0.105:9092"
+
+	//get topics
+	topics, err := getTopics([]string{kafkaURL})
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fmt.Printf("%d topics available:\n", len(topics))
+	for index := range topics {
+		fmt.Println("\t" + topics[index])
 	}
 
-	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-	batch := conn.ReadBatch(10e3, 1e6) // fetch 10KB min, 1MB max
+	//consume messages from topic
+	topic := "dbserver1"
 
-	b := make([]byte, 10e3) // 10KB max per message
+	reader := getKafkaReader(kafkaURL, topic)
+	defer reader.Close()
+
+	fmt.Println("start consuming ... !!")
 	for {
-		_, err := batch.Read(b)
+		m, err := reader.ReadMessage(context.Background())
 		if err != nil {
-			break
+			log.Fatalln(err)
 		}
-		fmt.Println(string(b))
+		fmt.Printf("\nmessage at topic:%v partition:%v offset:%v\n\t%s = %s\n", m.Topic, m.Partition, m.Offset, string(m.Key), string(m.Value))
 	}
-
-	if err := batch.Close(); err != nil {
-		log.Fatal("failed to close batch:", err)
-	}
-
-	if err := conn.Close(); err != nil {
-		log.Fatal("failed to close connection:", err)
-	}
-
-	// get kafka reader using environment variables.
-	// kafkaURL := "10.0.1.112:9092"
-	// topic := "dbserver1.inventory.customers"
-
-	// reader := getKafkaReader(kafkaURL, topic)
-
-	// defer reader.Close()
-
-	// fmt.Println(reader.Stats())
-	// fmt.Println("start consuming ... !!")
-	// for {
-	// 	m, err := reader.ReadMessage(context.Background())
-	// 	if err != nil {
-	// 		log.Fatalln(err)
-	// 	}
-	// 	fmt.Printf("message at topic:%v partition:%v offset:%v	%s = %s\n", m.Topic, m.Partition, m.Offset, string(m.Key), string(m.Value))
-	// }
 }
