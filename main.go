@@ -3,15 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
-	"strings"
+	"os"
 
 	"github.com/Shopify/sarama"
+	"github.com/cybertec-postgresql/debezium2postgres/internal/cmdparser"
 	kafka "github.com/segmentio/kafka-go"
+	"github.com/sirupsen/logrus"
 )
 
-func getKafkaReader(kafkaURL, topic string) *kafka.Reader {
-	brokers := strings.Split(kafkaURL, ",")
+func getKafkaReader(brokers []string, topic string) *kafka.Reader {
 	return kafka.NewReader(kafka.ReaderConfig{
 		Brokers:   brokers,
 		Topic:     topic,
@@ -37,22 +37,31 @@ func getTopics(brokers []string) ([]string, error) {
 }
 
 func main() {
-	kafkaURL := "10.0.0.105:9092"
-
+	cmdOpts, err := cmdparser.Parse()
+	if err != nil {
+		panic(err)
+	}
+	ll, err := logrus.ParseLevel(cmdOpts.LogLevel)
+	if err != nil {
+		ll = logrus.InfoLevel
+	}
+	var log = &logrus.Logger{
+		Out: os.Stderr,
+		Formatter: &logrus.JSONFormatter{
+			PrettyPrint: false, //set to true to debug
+		},
+		Level: ll,
+	}
+	log.WithField("cmdoptions", cmdOpts).Debugln("Starting CDC migration...")
 	//get topics
-	topics, err := getTopics([]string{kafkaURL})
+	topics, err := getTopics(cmdOpts.Kafka)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	fmt.Printf("%d topics available:\n", len(topics))
-	for index := range topics {
-		fmt.Println("\t" + topics[index])
-	}
+	log.WithField("topics", topics).Printf("%d topics available", len(topics))
 
 	//consume messages from topic
-	topic := "dbserver1"
-
-	reader := getKafkaReader(kafkaURL, topic)
+	reader := getKafkaReader(cmdOpts.Kafka, cmdOpts.Topic)
 	defer reader.Close()
 
 	fmt.Println("start consuming ... !!")
