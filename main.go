@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
+	"strings"
+	"sync"
 
 	"github.com/Shopify/sarama"
 	"github.com/cybertec-postgresql/debezium2postgres/internal/cmdparser"
@@ -47,12 +48,13 @@ func main() {
 	}
 	var log = &logrus.Logger{
 		Out: os.Stderr,
-		Formatter: &logrus.JSONFormatter{
-			PrettyPrint: false, //set to true to debug
+		Formatter: &logrus.TextFormatter{
+			DisableLevelTruncation: true,
+			DisableQuote:           true,
 		},
 		Level: ll,
 	}
-	log.WithField("cmdoptions", cmdOpts).Debugln("Starting CDC migration...")
+	log.WithField("options", cmdOpts).Debugln("Starting CDC migration...")
 	//get topics
 	topics, err := getTopics(cmdOpts.Kafka)
 	if err != nil {
@@ -61,15 +63,26 @@ func main() {
 	log.WithField("topics", topics).Printf("%d topics available", len(topics))
 
 	//consume messages from topic
-	reader := getKafkaReader(cmdOpts.Kafka, cmdOpts.Topic)
-	defer reader.Close()
-
-	fmt.Println("start consuming ... !!")
-	for {
-		m, err := reader.ReadMessage(context.Background())
-		if err != nil {
-			log.Fatalln(err)
+	var wg sync.WaitGroup
+	for _, topic := range topics {
+		log.WithField("topic", topic).WithField("prefix", cmdOpts.Topic).Debug("Checking for prefix")
+		if strings.HasPrefix(topic, cmdOpts.Topic) {
+			wg.Add(1)
+			go func(topic string) {
+				defer wg.Done()
+				reader := getKafkaReader(cmdOpts.Kafka, topic)
+				defer reader.Close()
+				log.WithField("topic", topic).Println("Start consuming... !!")
+				for {
+					m, err := reader.ReadMessage(context.Background())
+					if err != nil {
+						log.Error(err)
+						return
+					}
+					log.WithField("key", string(m.Key)).WithField("value", string(m.Value)).Info("Message consumed")
+				}
+			}(topic)
 		}
-		fmt.Printf("\nmessage at topic:%v partition:%v offset:%v\n\t%s = %s\n", m.Topic, m.Partition, m.Offset, string(m.Key), string(m.Value))
 	}
+	wg.Wait()
 }
