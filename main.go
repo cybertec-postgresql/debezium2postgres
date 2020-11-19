@@ -6,36 +6,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Shopify/sarama"
 	"github.com/cybertec-postgresql/debezium2postgres/internal/cmdparser"
-	kafka "github.com/segmentio/kafka-go"
+	"github.com/cybertec-postgresql/debezium2postgres/internal/kafka"
+	"github.com/cybertec-postgresql/debezium2postgres/internal/postgres"
 	"github.com/sirupsen/logrus"
 )
-
-func getKafkaReader(brokers []string, topic string) *kafka.Reader {
-	return kafka.NewReader(kafka.ReaderConfig{
-		Brokers:   brokers,
-		Topic:     topic,
-		Partition: 0,
-		MinBytes:  10e3, // 10KB
-		MaxBytes:  10e6, // 10MB
-	})
-}
-
-func getTopics(brokers []string) ([]string, error) {
-	config := sarama.NewConfig()
-	config.Consumer.Return.Errors = true
-
-	//get broker
-	cluster, err := sarama.NewConsumer(brokers, config)
-	if err != nil {
-		return nil, err
-	}
-	defer cluster.Close()
-
-	//get all topic from cluster
-	return cluster.Topics()
-}
 
 func main() {
 	cmdOpts, err := cmdparser.Parse()
@@ -55,31 +30,44 @@ func main() {
 		Level: ll,
 	}
 	log.WithField("options", cmdOpts).Debugln("Starting CDC migration...")
+
 	//get topics
-	topics, err := getTopics(cmdOpts.Kafka)
+	kafkalogger := log.WithField("module", "kafka")
+	topics, err := kafka.GetTopics(cmdOpts.Kafka)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	log.WithField("topics", topics).Printf("%d topics available", len(topics))
+	kafkalogger.WithField("topics", topics).Debug("kafka topics returned")
+	kafkalogger.Printf("kafka topics returned: %d", len(topics))
+
+	pglogger := log.WithField("module", "postgres")
+	db, err := postgres.Connect(context.Background(), cmdOpts.Postgres, pglogger)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	pglogger.WithField("connstring", db.Config().ConnString()).Debug("PostgreSQL connection established")
+	pglogger.Println("PostgreSQL connection established")
+	_, _ = db.Exec(context.Background(), "SELECT version()")
 
 	//consume messages from topic
 	var wg sync.WaitGroup
 	for _, topic := range topics {
-		log.WithField("topic", topic).WithField("prefix", cmdOpts.Topic).Debug("Checking for prefix")
+		kafkalogger.WithField("topic", topic).WithField("prefix", cmdOpts.Topic).Debug("Checking for prefix")
 		if strings.HasPrefix(topic, cmdOpts.Topic) {
 			wg.Add(1)
 			go func(topic string) {
+				topiclogger := kafkalogger.WithField("topic", topic)
 				defer wg.Done()
-				reader := getKafkaReader(cmdOpts.Kafka, topic)
+				reader := kafka.GetReader(cmdOpts.Kafka, topic)
 				defer reader.Close()
-				log.WithField("topic", topic).Println("Start consuming... !!")
+				topiclogger.Println("Start consuming...")
 				for {
 					m, err := reader.ReadMessage(context.Background())
 					if err != nil {
-						log.Error(err)
+						topiclogger.Error(err)
 						return
 					}
-					log.WithField("key", string(m.Key)).WithField("value", string(m.Value)).Info("Message consumed")
+					topiclogger.WithField("key", string(m.Key)).WithField("value", string(m.Value)).Debug("Message consumed")
 				}
 			}(topic)
 		}
