@@ -26,6 +26,7 @@ func main() {
 		Formatter: &logrus.TextFormatter{
 			DisableLevelTruncation: true,
 			DisableQuote:           true,
+			PadLevelText:           true,
 		},
 		Level: ll,
 	}

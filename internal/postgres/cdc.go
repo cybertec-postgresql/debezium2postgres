@@ -67,11 +67,12 @@ func ApplyCDCItem(ctx context.Context, conn *pgx.Conn, jsonData []byte) (int64, 
 func InsertCDCItem(ctx context.Context, conn *pgx.Conn, payload *cdcPayload) (int64, error) {
 	l := logger.WithField("op", "insert")
 	l.Debug("Starting InsertCDCItem()...")
-	refs := make([]string, 0, len(*payload.After))
-	for i := 1; i <= len(*payload.After); i++ {
+	fnumber := len(*payload.After)
+	refs := make([]string, 0, fnumber)
+	for i := 1; i <= fnumber; i++ {
 		refs = append(refs, "$"+strconv.Itoa(i))
 	}
-	args := make([]interface{}, 0, len(*payload.After))
+	args := make([]interface{}, 0, fnumber)
 	fields := make([]string, len(args))
 	for f, v := range *payload.After {
 		l.WithField("field", f).WithField("value", v).Debug("CDC value used")
@@ -88,9 +89,36 @@ func InsertCDCItem(ctx context.Context, conn *pgx.Conn, payload *cdcPayload) (in
 }
 
 func UpdateCDCItem(ctx context.Context, conn *pgx.Conn, payload *cdcPayload) (int64, error) {
-	// ct, err := conn.Exec(ctx, "INSERT INTO tablename VALUES (fields)")
-	// return ct.RowsAffected(), err
-	return 0, nil
+	l := logger.WithField("op", "update")
+	l.Debug("Starting UpdateCDCItem()...")
+	fnumber := len(*payload.After)
+	oldrefs := make([]string, 0, fnumber)
+	newrefs := make([]string, 0, fnumber)
+	for i := 1; i <= fnumber; i++ {
+		oldrefs = append(oldrefs, "$"+strconv.Itoa(i))
+		newrefs = append(newrefs, "$"+strconv.Itoa(i+fnumber))
+	}
+	args := make([]interface{}, 0, fnumber)
+	newargs := make([]interface{}, 0, fnumber)
+	fields := make([]string, 0, fnumber)
+	for f, v := range *payload.Before {
+		l.WithField("field", f).WithField("oldvalue", v).Debug("CDC value used")
+		fields = append(fields, strconv.Quote(f))
+		args = append(args, v)
+		v = (*payload.After)[f]
+		l.WithField("field", f).WithField("newvalue", v).Debug("CDC value used")
+		newargs = append(newargs, v)
+	}
+	args = append(args, newargs...)
+	sql := fmt.Sprintf("UPDATE %s SET (%s)=(%s) WHERE (%s)=(%s)",
+		payload.Source["table"],
+		strings.Join(fields, ","),
+		strings.Join(newrefs, ","),
+		strings.Join(fields, ","),
+		strings.Join(oldrefs, ","))
+	ct, err := conn.Exec(ctx, sql, args...)
+	l.Debug("Exiting UpdateCDCItem()...")
+	return ct.RowsAffected(), err
 }
 
 func DeleteCDCItem(ctx context.Context, conn *pgx.Conn, payload *cdcPayload) (int64, error) {
