@@ -21,6 +21,6 @@ func Connect(ctx context.Context, connString string, log *logrus.Entry) (*pgx.Co
 	if err != nil {
 		return nil, err
 	}
-	// connConfig.PreferSimpleProtocol = true
+	connConfig.PreferSimpleProtocol = true
 	return pgx.ConnectConfig(ctx, connConfig)
 }

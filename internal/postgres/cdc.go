@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 
 	pgx "github.com/jackc/pgx/v4"
 )
@@ -48,11 +50,7 @@ func ApplyCDCItem(ctx context.Context, conn *pgx.Conn, jsonData []byte) (int64, 
 	if err := json.Unmarshal(jsonData, &msg); err != nil {
 		return -1, err
 	}
-	logger.WithField("schema", msg.Schema).Debug("Schema used for applying CDC item")
-	for k, v := range *msg.Payload.After {
-		logger.WithField(k, v).Info("Payload value used")
-	}
-	fmt.Println("")
+	logger.WithField("schema", msg.Schema).Trace("Schema used for applying CDC item")
 	switch msg.Payload.Op {
 	case "c":
 		return InsertCDCItem(ctx, conn, msg.Payload)
@@ -67,9 +65,26 @@ func ApplyCDCItem(ctx context.Context, conn *pgx.Conn, jsonData []byte) (int64, 
 }
 
 func InsertCDCItem(ctx context.Context, conn *pgx.Conn, payload *cdcPayload) (int64, error) {
-	// ct, err := conn.Exec(ctx, "INSERT INTO tablename VALUES (fields)")
-	// return ct.RowsAffected(), err
-	return 0, nil
+	l := logger.WithField("op", "insert")
+	l.Debug("Starting InsertCDCItem()...")
+	refs := make([]string, 0, len(*payload.After))
+	for i := 1; i <= len(*payload.After); i++ {
+		refs = append(refs, "$"+strconv.Itoa(i))
+	}
+	args := make([]interface{}, 0, len(*payload.After))
+	fields := make([]string, len(args))
+	for f, v := range *payload.After {
+		l.WithField("field", f).WithField("value", v).Debug("CDC value used")
+		fields = append(fields, strconv.Quote(f))
+		args = append(args, v)
+	}
+	sql := fmt.Sprintf("INSERT INTO %s(%s) VALUES (%s)",
+		payload.Source["table"],
+		strings.Join(fields, ","),
+		strings.Join(refs, ","))
+	ct, err := conn.Exec(ctx, sql, args...)
+	l.Debug("Exiting InsertCDCItem()...")
+	return ct.RowsAffected(), err
 }
 
 func UpdateCDCItem(ctx context.Context, conn *pgx.Conn, payload *cdcPayload) (int64, error) {

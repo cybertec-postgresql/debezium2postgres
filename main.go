@@ -67,10 +67,10 @@ func main() {
 						topiclogger.Error(err)
 						return
 					}
-					topiclogger.WithField("key", string(m.Key)).WithField("value", string(m.Value)).Debug("Message consumed")
+					topiclogger.WithField("key", string(m.Key)).WithField("value", string(m.Value)).Trace("Message consumed")
 					_, err = postgres.ApplyCDCItem(context.Background(), db, m.Value)
 					if err != nil {
-						topiclogger.Error(err)
+						pglogger.Error(err)
 					}
 				}
 			}(topic)
