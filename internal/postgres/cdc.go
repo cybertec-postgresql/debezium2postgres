@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -122,7 +123,28 @@ func UpdateCDCItem(ctx context.Context, conn *pgx.Conn, payload *cdcPayload) (in
 }
 
 func DeleteCDCItem(ctx context.Context, conn *pgx.Conn, payload *cdcPayload) (int64, error) {
-	// ct, err := conn.Exec(ctx, "INSERT INTO tablename VALUES (fields)")
-	// return ct.RowsAffected(), err
-	return 0, nil
+	l := logger.WithField("op", "delete")
+	if payload.Before == nil {
+		return -1, errors.New("Payload.Before is nil")
+	}
+	l.Debug("Starting DeleteCDCItem()...")
+	fnumber := len(*payload.Before)
+	refs := make([]string, 0, fnumber)
+	for i := 1; i <= fnumber; i++ {
+		refs = append(refs, "$"+strconv.Itoa(i))
+	}
+	args := make([]interface{}, 0, fnumber)
+	fields := make([]string, 0, fnumber)
+	for f, v := range *payload.Before {
+		l.WithField("field", f).WithField("oldvalue", v).Debug("CDC value used")
+		fields = append(fields, strconv.Quote(f))
+		args = append(args, v)
+	}
+	sql := fmt.Sprintf("DELETE FROM %s WHERE (%s)=(%s)",
+		payload.Source["table"],
+		strings.Join(fields, ","),
+		strings.Join(refs, ","))
+	ct, err := conn.Exec(ctx, sql, args...)
+	l.Debug("Exiting DeleteCDCItem()...")
+	return ct.RowsAffected(), err
 }
