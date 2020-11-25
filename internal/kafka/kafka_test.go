@@ -11,13 +11,7 @@ import (
 )
 
 func TestGetReader(t *testing.T) {
-	// return kafkago.NewReader(kafka.ReaderConfig{
-	// 	Brokers:   brokers,
-	// 	Topic:     topic,
-	// 	Partition: 0,
-	// 	MinBytes:  10e3, // 10KB
-	// 	MaxBytes:  10e6, // 10MB
-	// })
+	assert.NotNil(t, kafka.GetReader([]string{"foo", "bar"}, "baz"))
 }
 
 func TestGetTopics(t *testing.T) {
@@ -28,8 +22,11 @@ func TestGetTopics(t *testing.T) {
 	assert.Error(t, err)
 
 	kafka.NewConsumer = func(addrs []string, config *sarama.Config) (sarama.Consumer, error) {
-		return mocks.NewConsumer(t, nil), nil
+		c := mocks.NewConsumer(t, nil)
+		c.SetTopicMetadata(map[string][]int32{"foo": {1, 2, 3}})
+		return c, nil
 	}
-	_, err = kafka.GetTopics([]string{"foo", "bar"})
-	assert.Error(t, err)
+	topics, err := kafka.GetTopics([]string{"foo", "bar"})
+	assert.NoError(t, err)
+	assert.Equal(t, topics, []string{"foo"})
 }
