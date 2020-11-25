@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var logger *logrus.Entry
+var Logger *logrus.Entry
 
 type DBExecutorContext interface {
 	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
@@ -19,7 +19,7 @@ type DBExecutorContext interface {
 var NewConnecton = pgxpool.ConnectConfig
 
 func Connect(ctx context.Context, connString string, log *logrus.Entry) (DBExecutorContext, error) {
-	logger = log
+	Logger = log
 	connConfig, err := pgxpool.ParseConfig(connString)
 	if err != nil {
 		return nil, err
