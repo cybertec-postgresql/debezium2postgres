@@ -19,7 +19,8 @@ func (m MockDbExec) Exec(ctx context.Context, sql string, arguments ...interface
 }
 
 func TestApplyCDCItem(t *testing.T) {
-	postgres.Logger = logrus.New().WithField("foo", "bar")
+	postgres.Logger = logrus.New().WithField("method", "TestApplyCDCItem")
+
 	_, err := postgres.ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`foo`))
 	assert.Error(t, err, "Invalid JSON")
 
@@ -41,4 +42,13 @@ func TestApplyCDCItem(t *testing.T) {
 	res, err := postgres.ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "r"}}`))
 	assert.NoError(t, err, "Payload.After is nil")
 	assert.Equal(t, int64(0), res, "ignore snapshot reading")
+}
+
+func TestInsertCDCItem(t *testing.T) {
+	postgres.Logger = logrus.New().WithField("method", "TestInsertCDCItem")
+	postgres.Logger.Level = logrus.TraceLevel
+
+	_, err := postgres.InsertCDCItem(context.Background(), MockDbExec{},
+		&postgres.CdcPayload{After: &map[string]interface{}{"field1": "value1", "field2": "value2"}})
+	assert.NoError(t, err)
 }
