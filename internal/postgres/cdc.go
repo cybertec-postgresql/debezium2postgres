@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	pgx "github.com/jackc/pgx/v4"
 )
 
 type cdcField struct {
@@ -46,7 +44,7 @@ type cdcMessage struct {
 	Payload *cdcPayload `json:"payload"`
 }
 
-func ApplyCDCItem(ctx context.Context, conn *pgx.Conn, jsonData []byte) (int64, error) {
+func ApplyCDCItem(ctx context.Context, conn DBExecutorContext, jsonData []byte) (int64, error) {
 	var msg cdcMessage
 	if err := json.Unmarshal(jsonData, &msg); err != nil {
 		return -1, err
@@ -65,7 +63,7 @@ func ApplyCDCItem(ctx context.Context, conn *pgx.Conn, jsonData []byte) (int64, 
 	return 0, nil
 }
 
-func InsertCDCItem(ctx context.Context, conn *pgx.Conn, payload *cdcPayload) (int64, error) {
+func InsertCDCItem(ctx context.Context, conn DBExecutorContext, payload *cdcPayload) (int64, error) {
 	l := logger.WithField("op", "insert")
 	l.Debug("Starting InsertCDCItem()...")
 	fnumber := len(*payload.After)
@@ -89,7 +87,7 @@ func InsertCDCItem(ctx context.Context, conn *pgx.Conn, payload *cdcPayload) (in
 	return ct.RowsAffected(), err
 }
 
-func UpdateCDCItem(ctx context.Context, conn *pgx.Conn, payload *cdcPayload) (int64, error) {
+func UpdateCDCItem(ctx context.Context, conn DBExecutorContext, payload *cdcPayload) (int64, error) {
 	l := logger.WithField("op", "update")
 	l.Debug("Starting UpdateCDCItem()...")
 	fnumber := len(*payload.After)
@@ -122,7 +120,7 @@ func UpdateCDCItem(ctx context.Context, conn *pgx.Conn, payload *cdcPayload) (in
 	return ct.RowsAffected(), err
 }
 
-func DeleteCDCItem(ctx context.Context, conn *pgx.Conn, payload *cdcPayload) (int64, error) {
+func DeleteCDCItem(ctx context.Context, conn DBExecutorContext, payload *cdcPayload) (int64, error) {
 	l := logger.WithField("op", "delete")
 	if payload.Before == nil {
 		return -1, errors.New("Payload.Before is nil")

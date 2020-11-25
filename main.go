@@ -46,7 +46,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	pglogger.WithField("connstring", db.Config().ConnString()).Debug("PostgreSQL connection established")
+	pglogger.Debug("PostgreSQL connection established")
 	pglogger.Println("PostgreSQL connection established")
 	_, _ = db.Exec(context.Background(), "SELECT version()")
 
