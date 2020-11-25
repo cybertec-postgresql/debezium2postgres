@@ -69,9 +69,11 @@ func main() {
 						return
 					}
 					topiclogger.WithField("key", string(m.Key)).WithField("value", string(m.Value)).Trace("Message consumed")
-					_, err = postgres.ApplyCDCItem(context.Background(), db, m.Value)
+					rowsAffected, err := postgres.ApplyCDCItem(context.Background(), db, m.Value)
 					if err != nil {
 						pglogger.Error(err)
+					} else if rowsAffected == 0 {
+						topiclogger.Warning("CDC item caused no changes")
 					}
 				}
 			}(topic)

@@ -15,12 +15,14 @@ func GetReader(brokers []string, topic string) *kafka.Reader {
 	})
 }
 
+var NewConsumer = sarama.NewConsumer
+
 func GetTopics(brokers []string) ([]string, error) {
 	config := sarama.NewConfig()
 	config.Consumer.Return.Errors = true
 
 	//get broker
-	cluster, err := sarama.NewConsumer(brokers, config)
+	cluster, err := NewConsumer(brokers, config)
 	if err != nil {
 		return nil, err
 	}
