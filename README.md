@@ -1,3 +1,8 @@
+
+[![Build Status](https://github.com/cybertec-postgresql/debezium2postgres/workflows/Go%20Build%20&%20Test/badge.svg)](https://github.com/cybertec-postgresql/debezium2postgres/actions)
+[![Coverage Status](https://coveralls.io/repos/github/cybertec-postgresql/debezium2postgres/badge.svg?branch=main)](https://coveralls.io/github/cybertec-postgresql/debezium2postgres?branch=main)
+[![Go Report Card](https://goreportcard.com/badge/github.com/cybertec-postgresql/debezium2postgres)](https://goreportcard.com/report/github.com/cybertec-postgresql/debezium2postgres)
+
 # debezium2postgres
 Application to apply CDC log from Debezium to the destination PostgreSQL
 
