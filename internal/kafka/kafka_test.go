@@ -1,8 +1,10 @@
 package kafka_test
 
 import (
+	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Shopify/sarama"
 	"github.com/Shopify/sarama/mocks"
@@ -20,8 +22,15 @@ func TestGetTopics(t *testing.T) {
 	kafka.NewConsumer = func(addrs []string, config *sarama.Config) (sarama.Consumer, error) {
 		return nil, errors.New("Failed")
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
 	_, err := kafka.GetTopics([]string{"foo", "bar"})
 	assert.Error(t, err)
+	kafka.Logger.Logger.ExitFunc = func(int) {
+		t.Log("log.Fatal called")
+	}
+	kafka.Consume(ctx, []string{"foo", "bar"}, "baz", make(chan []byte, 1))
 
 	kafka.NewConsumer = func(addrs []string, config *sarama.Config) (sarama.Consumer, error) {
 		c := mocks.NewConsumer(t, nil)
@@ -29,6 +38,7 @@ func TestGetTopics(t *testing.T) {
 		return c, nil
 	}
 	topics, err := kafka.GetTopics([]string{"foo", "bar"})
+	kafka.Consume(ctx, []string{"foo", "bar"}, "foo", make(chan []byte, 1))
 	assert.NoError(t, err)
 	assert.Equal(t, topics, []string{"foo"})
 }
