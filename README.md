@@ -13,4 +13,4 @@ Application to apply CDC log from Debezium to the destination PostgreSQL
 - `loglevel` - output message level, e.g. `trace, debug, info, warn, error, panic`
 - `postgres` - PostgreSQL connection URL
 
-:warning: To connect to `kafka` cluster the `advertised.listeners` option should be confugired properly. See more https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc/
+:warning: To connect to `kafka` cluster the `advertised.listeners` option should be configured properly. See more https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc/
