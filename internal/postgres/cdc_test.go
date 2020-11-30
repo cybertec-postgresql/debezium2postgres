@@ -47,7 +47,10 @@ func TestApplyCDCItem(t *testing.T) {
 func TestInsertCDCItem(t *testing.T) {
 	postgres.Logger = logrus.New().WithField("method", "TestInsertCDCItem")
 
-	_, err := postgres.InsertCDCItem(context.Background(), MockDbExec{},
+	_, err := postgres.InsertCDCItem(context.Background(), MockDbExec{}, &postgres.CdcPayload{})
+	assert.Error(t, err, "Payload.After is nil")
+
+	_, err = postgres.InsertCDCItem(context.Background(), MockDbExec{},
 		&postgres.CdcPayload{After: &map[string]interface{}{"field1": "value1", "field2": "value2"}})
 	assert.NoError(t, err)
 }
@@ -67,5 +70,16 @@ func TestUpdateCDCItem(t *testing.T) {
 			After:  &map[string]interface{}{"field1": "value1", "field2": "value2"},
 			Before: &map[string]interface{}{"field1": "value1", "field2": "value2"},
 		})
+	assert.NoError(t, err)
+}
+
+func TestDeleteCDCItem(t *testing.T) {
+	postgres.Logger = logrus.New().WithField("method", "TestDeleteCDCItem")
+
+	_, err := postgres.DeleteCDCItem(context.Background(), MockDbExec{}, &postgres.CdcPayload{})
+	assert.Error(t, err, "Payload.Before is nil")
+
+	_, err = postgres.DeleteCDCItem(context.Background(), MockDbExec{},
+		&postgres.CdcPayload{Before: &map[string]interface{}{"field1": "value1", "field2": "value2"}})
 	assert.NoError(t, err)
 }

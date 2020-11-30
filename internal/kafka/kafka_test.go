@@ -7,6 +7,7 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/Shopify/sarama/mocks"
 	"github.com/cybertec-postgresql/debezium2postgres/internal/kafka"
+	"github.com/cybertec-postgresql/debezium2postgres/internal/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,6 +16,7 @@ func TestGetReader(t *testing.T) {
 }
 
 func TestGetTopics(t *testing.T) {
+	_ = log.Init(map[bool]string{false: "info", true: "debug"}[testing.Verbose()])
 	kafka.NewConsumer = func(addrs []string, config *sarama.Config) (sarama.Consumer, error) {
 		return nil, errors.New("Failed")
 	}

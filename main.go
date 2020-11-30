@@ -2,14 +2,11 @@ package main
 
 import (
 	"context"
-	"os"
-	"strings"
-	"sync"
 
 	"github.com/cybertec-postgresql/debezium2postgres/internal/cmdparser"
 	"github.com/cybertec-postgresql/debezium2postgres/internal/kafka"
+	"github.com/cybertec-postgresql/debezium2postgres/internal/log"
 	"github.com/cybertec-postgresql/debezium2postgres/internal/postgres"
-	"github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -17,67 +14,16 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	ll, err := logrus.ParseLevel(cmdOpts.LogLevel)
-	if err != nil {
-		ll = logrus.InfoLevel
-	}
-	var log = &logrus.Logger{
-		Out: os.Stderr,
-		Formatter: &logrus.TextFormatter{
-			DisableLevelTruncation: true,
-			DisableQuote:           true,
-			PadLevelText:           true,
-		},
-		Level: ll,
-	}
-	log.WithField("options", cmdOpts).Debugln("Starting CDC migration...")
+	log := log.Init(cmdOpts.LogLevel)
+	log.WithField("options", cmdOpts).Debug("Starting CDC migration...")
 
-	//get topics
-	kafkalogger := log.WithField("module", "kafka")
-	topics, err := kafka.GetTopics(cmdOpts.Kafka)
+	db, err := postgres.Connect(context.Background(), cmdOpts.Postgres)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	kafkalogger.WithField("topics", topics).Debug("kafka topics returned")
-	kafkalogger.Printf("kafka topics returned: %d", len(topics))
 
-	pglogger := log.WithField("module", "postgres")
-	db, err := postgres.Connect(context.Background(), cmdOpts.Postgres, pglogger)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	pglogger.Debug("PostgreSQL connection established")
-	pglogger.Println("PostgreSQL connection established")
-	_, _ = db.Exec(context.Background(), "SELECT version()")
-
-	//consume messages from topic
-	var wg sync.WaitGroup
-	for _, topic := range topics {
-		kafkalogger.WithField("topic", topic).WithField("prefix", cmdOpts.Topic).Debug("Checking for prefix")
-		if strings.HasPrefix(topic, cmdOpts.Topic) {
-			wg.Add(1)
-			go func(topic string) {
-				topiclogger := kafkalogger.WithField("topic", topic)
-				defer wg.Done()
-				reader := kafka.GetReader(cmdOpts.Kafka, topic)
-				defer reader.Close()
-				topiclogger.Println("Start consuming...")
-				for {
-					m, err := reader.ReadMessage(context.Background())
-					if err != nil {
-						topiclogger.Error(err)
-						return
-					}
-					topiclogger.WithField("key", string(m.Key)).WithField("value", string(m.Value)).Trace("Message consumed")
-					rowsAffected, err := postgres.ApplyCDCItem(context.Background(), db, m.Value)
-					if err != nil {
-						pglogger.Error(err)
-					} else if rowsAffected == 0 {
-						topiclogger.Warning("CDC item caused no changes")
-					}
-				}
-			}(topic)
-		}
-	}
-	wg.Wait()
+	// create channel for passing messages to database worker
+	var msgChannel chan []byte = make(chan []byte, 16)
+	kafka.Consume(context.Background(), cmdOpts.Kafka, cmdOpts.Topic, msgChannel)
+	postgres.Apply(context.Background(), db, msgChannel)
 }

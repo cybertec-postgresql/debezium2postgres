@@ -18,14 +18,13 @@ type DBExecutorContext interface {
 
 var NewConnecton = pgxpool.ConnectConfig
 
-func Connect(ctx context.Context, connString string, log *logrus.Entry) (DBExecutorContext, error) {
-	Logger = log
+func Connect(ctx context.Context, connString string) (DBExecutorContext, error) {
 	connConfig, err := pgxpool.ParseConfig(connString)
 	if err != nil {
 		return nil, err
 	}
-	connConfig.ConnConfig.Logger = logrusadapter.NewLogger(log)
-	connConfig.ConnConfig.LogLevel, err = pgx.LogLevelFromString(log.Logger.Level.String())
+	connConfig.ConnConfig.Logger = logrusadapter.NewLogger(Logger)
+	connConfig.ConnConfig.LogLevel, err = pgx.LogLevelFromString(Logger.Logger.Level.String())
 	if err != nil {
 		return nil, err
 	}

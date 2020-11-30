@@ -11,18 +11,18 @@ import (
 )
 
 func TestConnect(t *testing.T) {
-	l := logrus.New().WithField("foo", "bar")
-	_, err := postgres.Connect(context.Background(), "fooconnstr", l)
+	postgres.Logger = logrus.New().WithField("foo", "bar")
+	_, err := postgres.Connect(context.Background(), "fooconnstr")
 	assert.Error(t, err, "invalid dsn")
 
-	l.Logger.Level = 42
-	_, err = postgres.Connect(context.Background(), "postgres://user:password@host/db", l)
+	postgres.Logger.Level = 42
+	_, err = postgres.Connect(context.Background(), "postgres://user:password@host/db")
 	assert.Error(t, err, "invalid log level")
 
-	l.Logger.Level = logrus.InfoLevel
+	postgres.Logger.Logger.Level = logrus.InfoLevel
 	postgres.NewConnecton = func(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool, error) {
 		return nil, nil
 	}
-	_, err = postgres.Connect(context.Background(), "postgres://user:password@host/db", l)
+	_, err = postgres.Connect(context.Background(), "postgres://user:password@host/db")
 	assert.NoError(t, err)
 }

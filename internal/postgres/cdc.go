@@ -44,6 +44,22 @@ type CdcMessage struct {
 	Payload *CdcPayload `json:"payload"`
 }
 
+func Apply(ctx context.Context, conn DBExecutorContext, messages <-chan []byte) {
+	for {
+		select {
+		case m := <-messages:
+			rowsAffected, err := ApplyCDCItem(ctx, conn, m)
+			if err != nil {
+				Logger.Error(err)
+			} else if rowsAffected == 0 {
+				Logger.Warning("CDC item caused no changes")
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 func ApplyCDCItem(ctx context.Context, conn DBExecutorContext, jsonData []byte) (int64, error) {
 	var msg CdcMessage
 	if err := json.Unmarshal(jsonData, &msg); err != nil {
