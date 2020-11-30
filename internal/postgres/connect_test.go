@@ -15,7 +15,7 @@ func TestConnect(t *testing.T) {
 	_, err := postgres.Connect(context.Background(), "fooconnstr")
 	assert.Error(t, err, "invalid dsn")
 
-	postgres.Logger.Level = 42
+	postgres.Logger.Logger.Level = 42
 	_, err = postgres.Connect(context.Background(), "postgres://user:password@host/db")
 	assert.Error(t, err, "invalid log level")
 

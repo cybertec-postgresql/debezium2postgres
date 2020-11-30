@@ -1,72 +1,104 @@
-package postgres_test
+package postgres
 
 import (
 	"context"
 	"testing"
+	"time"
 
-	"github.com/cybertec-postgresql/debezium2postgres/internal/postgres"
 	"github.com/jackc/pgconn"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
 type MockDbExec struct {
-	postgres.DBExecutorContext
+	DBExecutorContext
+	ExecHandler func() (pgconn.CommandTag, error)
 }
 
 func (m MockDbExec) Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error) {
+	if m.ExecHandler != nil {
+		return m.ExecHandler()
+	}
 	return nil, nil
 }
 
-func TestApplyCDCItem(t *testing.T) {
-	postgres.Logger = logrus.New().WithField("method", "TestApplyCDCItem")
+func TestApply(t *testing.T) {
+	Logger = logrus.New().WithField("method", "TestApply")
 
-	_, err := postgres.ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`foo`))
+	var msgChan chan []byte = make(chan []byte, 2)
+	msgChan <- []byte(`foo`)
+	msgChan <- []byte(`{
+  "schema": null,
+  "payload": {
+    "before": {
+      "id": 16
+    },
+    "after": null,
+    "source": null,
+    "op": "d"
+  }
+}`)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	Apply(ctx, MockDbExec{}, msgChan)
+	Apply(ctx, MockDbExec{
+		ExecHandler: func() (pgconn.CommandTag, error) {
+			return pgconn.CommandTag("no affected rows"), nil
+		},
+	}, msgChan)
+}
+
+func TestApplyCDCItem(t *testing.T) {
+	Logger = logrus.New().WithField("method", "TestApplyCDCItem")
+
+	_, err := ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`foo`))
 	assert.Error(t, err, "Invalid JSON")
 
-	_, err = postgres.ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": null}`))
+	_, err = ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": null}`))
 	assert.Error(t, err, "Payload is nil")
 
-	_, err = postgres.ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "foo"}}`))
+	_, err = ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "foo"}}`))
 	assert.Error(t, err, "Unsupported operation")
 
-	_, err = postgres.ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "c"}}`))
+	_, err = ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "c"}}`))
 	assert.Error(t, err, "Payload.After is nil")
 
-	_, err = postgres.ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "u"}}`))
+	_, err = ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "u"}}`))
 	assert.Error(t, err, "Payload.After is nil")
 
-	_, err = postgres.ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "d"}}`))
+	_, err = ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "d"}}`))
 	assert.Error(t, err, "Payload.After is nil")
 
-	res, err := postgres.ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "r"}}`))
+	res, err := ApplyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "r"}}`))
 	assert.NoError(t, err, "Payload.After is nil")
 	assert.Equal(t, int64(0), res, "ignore snapshot reading")
 }
 
 func TestInsertCDCItem(t *testing.T) {
-	postgres.Logger = logrus.New().WithField("method", "TestInsertCDCItem")
+	Logger = logrus.New().WithField("method", "TestInsertCDCItem")
 
-	_, err := postgres.InsertCDCItem(context.Background(), MockDbExec{}, &postgres.CdcPayload{})
+	_, err := InsertCDCItem(context.Background(), MockDbExec{}, &cdcPayload{})
 	assert.Error(t, err, "Payload.After is nil")
 
-	_, err = postgres.InsertCDCItem(context.Background(), MockDbExec{},
-		&postgres.CdcPayload{After: &map[string]interface{}{"field1": "value1", "field2": "value2"}})
+	_, err = InsertCDCItem(context.Background(), MockDbExec{},
+		&cdcPayload{After: &map[string]interface{}{"field1": "value1", "field2": "value2"}})
 	assert.NoError(t, err)
 }
 
 func TestUpdateCDCItem(t *testing.T) {
-	postgres.Logger = logrus.New().WithField("method", "TestUpdateCDCItem")
+	Logger = logrus.New().WithField("method", "TestUpdateCDCItem")
 
-	_, err := postgres.UpdateCDCItem(context.Background(), MockDbExec{}, &postgres.CdcPayload{})
+	_, err := UpdateCDCItem(context.Background(), MockDbExec{}, &cdcPayload{})
 	assert.Error(t, err, "Payload.Before is nil")
 
-	_, err = postgres.UpdateCDCItem(context.Background(), MockDbExec{},
-		&postgres.CdcPayload{Before: &map[string]interface{}{"field1": "value1", "field2": "value2"}})
+	_, err = UpdateCDCItem(context.Background(), MockDbExec{},
+		&cdcPayload{Before: &map[string]interface{}{"field1": "value1", "field2": "value2"}})
 	assert.Error(t, err, "Payload.After is nil")
 
-	_, err = postgres.UpdateCDCItem(context.Background(), MockDbExec{},
-		&postgres.CdcPayload{
+	_, err = UpdateCDCItem(context.Background(), MockDbExec{},
+		&cdcPayload{
 			After:  &map[string]interface{}{"field1": "value1", "field2": "value2"},
 			Before: &map[string]interface{}{"field1": "value1", "field2": "value2"},
 		})
@@ -74,12 +106,12 @@ func TestUpdateCDCItem(t *testing.T) {
 }
 
 func TestDeleteCDCItem(t *testing.T) {
-	postgres.Logger = logrus.New().WithField("method", "TestDeleteCDCItem")
+	Logger = logrus.New().WithField("method", "TestDeleteCDCItem")
 
-	_, err := postgres.DeleteCDCItem(context.Background(), MockDbExec{}, &postgres.CdcPayload{})
+	_, err := DeleteCDCItem(context.Background(), MockDbExec{}, &cdcPayload{})
 	assert.Error(t, err, "Payload.Before is nil")
 
-	_, err = postgres.DeleteCDCItem(context.Background(), MockDbExec{},
-		&postgres.CdcPayload{Before: &map[string]interface{}{"field1": "value1", "field2": "value2"}})
+	_, err = DeleteCDCItem(context.Background(), MockDbExec{},
+		&cdcPayload{Before: &map[string]interface{}{"field1": "value1", "field2": "value2"}})
 	assert.NoError(t, err)
 }

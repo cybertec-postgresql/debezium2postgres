@@ -9,28 +9,28 @@ import (
 	"strings"
 )
 
-type CdcField struct {
+type cdcField struct {
 	Type     string `json:"type"`
 	Optional bool   `json:"optional"`
 	Field    string `json:"field"`
 }
 
-type CdcFields struct {
+type cdcFields struct {
 	Type     string     `json:"type"`
-	Fields   []CdcField `json:"fields,omitempty"`
+	Fields   []cdcField `json:"fields,omitempty"`
 	Optional bool       `json:"optional"`
 	Name     string     `json:"name,omitempty"`
 	Field    string     `json:"field"`
 }
 
-type CdcSchema struct {
+type cdcSchema struct {
 	Type     string      `json:"type"`
 	Name     string      `json:"name"`
-	Fields   []CdcFields `json:"fields"`
+	Fields   []cdcFields `json:"fields"`
 	Optional bool        `json:"optional"`
 }
 
-type CdcPayload struct {
+type cdcPayload struct {
 	Before      *map[string]interface{} `json:"before"`
 	After       *map[string]interface{} `json:"after"`
 	Source      map[string]interface{}  `json:"source"`
@@ -40,8 +40,8 @@ type CdcPayload struct {
 }
 
 type CdcMessage struct {
-	Schema  *CdcSchema  `json:"schema"`
-	Payload *CdcPayload `json:"payload"`
+	Schema  *cdcSchema  `json:"schema"`
+	Payload *cdcPayload `json:"payload"`
 }
 
 func Apply(ctx context.Context, conn DBExecutorContext, messages <-chan []byte) {
@@ -83,7 +83,7 @@ func ApplyCDCItem(ctx context.Context, conn DBExecutorContext, jsonData []byte) 
 	return 0, errors.New("Unsupported operation")
 }
 
-func InsertCDCItem(ctx context.Context, conn DBExecutorContext, payload *CdcPayload) (int64, error) {
+func InsertCDCItem(ctx context.Context, conn DBExecutorContext, payload *cdcPayload) (int64, error) {
 	l := Logger.WithField("op", "insert")
 	if payload.After == nil {
 		return -1, errors.New("Payload.After is nil")
@@ -110,7 +110,7 @@ func InsertCDCItem(ctx context.Context, conn DBExecutorContext, payload *CdcPayl
 	return ct.RowsAffected(), err
 }
 
-func UpdateCDCItem(ctx context.Context, conn DBExecutorContext, payload *CdcPayload) (int64, error) {
+func UpdateCDCItem(ctx context.Context, conn DBExecutorContext, payload *cdcPayload) (int64, error) {
 	l := Logger.WithField("op", "update")
 	if payload.Before == nil {
 		return -1, errors.New("Payload.Before is nil")
@@ -149,7 +149,7 @@ func UpdateCDCItem(ctx context.Context, conn DBExecutorContext, payload *CdcPayl
 	return ct.RowsAffected(), err
 }
 
-func DeleteCDCItem(ctx context.Context, conn DBExecutorContext, payload *CdcPayload) (int64, error) {
+func DeleteCDCItem(ctx context.Context, conn DBExecutorContext, payload *cdcPayload) (int64, error) {
 	l := Logger.WithField("op", "delete")
 	if payload.Before == nil {
 		return -1, errors.New("Payload.Before is nil")
