@@ -22,7 +22,7 @@ func TestGetTopics(t *testing.T) {
 	kafka.NewConsumer = func(addrs []string, config *sarama.Config) (sarama.Consumer, error) {
 		return nil, errors.New("Failed")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 
 	_, err := kafka.GetTopics([]string{"foo", "bar"})
