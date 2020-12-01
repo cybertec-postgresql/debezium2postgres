@@ -8,6 +8,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/Shopify/sarama/mocks"
+	kafka "github.com/segmentio/kafka-go"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -41,4 +42,40 @@ func TestGetTopics(t *testing.T) {
 	Consume(ctx, []string{"foo", "bar"}, "foo", make(chan []byte, 1))
 	assert.NoError(t, err)
 	assert.Equal(t, topics, []string{"foo"})
+}
+
+type mockKafkaReader struct {
+	kafkaReader
+	ReadMessageHandler func() (kafka.Message, error)
+}
+
+func (r *mockKafkaReader) ReadMessage(ctx context.Context) (kafka.Message, error) {
+	if r.ReadMessageHandler != nil {
+		return r.ReadMessageHandler()
+	}
+	if ctx.Err() != nil {
+		return kafka.Message{}, ctx.Err()
+	}
+	time.Sleep(500 * time.Millisecond)
+	return kafka.Message{}, nil
+}
+
+func (r *mockKafkaReader) Close() error {
+	return nil
+}
+func TestConsumeTopic(t *testing.T) {
+	Logger = logrus.New().WithField("method", "TestConsumeTopic")
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	consumeTopic(ctx, []string{"foo", "bar"}, "baz", make(chan []byte, 10))
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	getReader = func(brokers []string, topic string) kafkaReader {
+		return &mockKafkaReader{}
+	}
+	consumeTopic(ctx, []string{"foo", "bar"}, "baz", make(chan []byte, 10))
 }

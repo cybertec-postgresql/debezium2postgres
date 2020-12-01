@@ -12,8 +12,13 @@ import (
 // Logger provides access to the Kafka specific logging facility
 var Logger *logrus.Entry
 
+type kafkaReader interface {
+	ReadMessage(ctx context.Context) (kafka.Message, error)
+	Close() error
+}
+
 // getReader returns a kafka reader to consume messages from `brokers` with `topic`
-func getReader(brokers []string, topic string) *kafka.Reader {
+var getReader = func(brokers []string, topic string) kafkaReader {
 	return kafka.NewReader(kafka.ReaderConfig{
 		Brokers:   brokers,
 		Topic:     topic,
