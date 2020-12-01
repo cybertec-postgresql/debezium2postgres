@@ -1,28 +1,23 @@
-package postgres_test
+package postgres
 
 import (
 	"context"
 	"testing"
 
-	"github.com/cybertec-postgresql/debezium2postgres/internal/postgres"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestConnect(t *testing.T) {
-	postgres.Logger = logrus.New().WithField("foo", "bar")
-	_, err := postgres.Connect(context.Background(), "fooconnstr")
+	Logger = logrus.New().WithField("method", "TestConnect")
+	_, err := connect(context.Background(), "fooconnstr")
 	assert.Error(t, err, "invalid dsn")
 
-	postgres.Logger.Logger.Level = 42
-	_, err = postgres.Connect(context.Background(), "postgres://user:password@host/db")
+	Logger.Logger.Level = 42
+	_, err = connect(context.Background(), "postgres://user:password@host/db")
 	assert.Error(t, err, "invalid log level")
 
-	postgres.Logger.Logger.Level = logrus.InfoLevel
-	postgres.NewConnecton = func(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool, error) {
-		return nil, nil
-	}
-	_, err = postgres.Connect(context.Background(), "postgres://user:password@host/db")
-	assert.NoError(t, err)
+	Logger.Logger.Level = logrus.InfoLevel
+	_, err = connect(context.Background(), "postgres://user:password@host/db")
+	assert.Error(t, err, "host resolving error")
 }

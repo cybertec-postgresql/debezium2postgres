@@ -10,15 +10,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Logger provides access to the PostgreSQL specific logging facility
 var Logger *logrus.Entry
 
+// DBExecutorContext interface represents sql executor with context support
 type DBExecutorContext interface {
 	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
 }
 
-var NewConnecton = pgxpool.ConnectConfig
+// Connect function returns object that can execute sql against target database
+var Connect func(ctx context.Context, connString string) (DBExecutorContext, error) = connect
 
-func Connect(ctx context.Context, connString string) (DBExecutorContext, error) {
+func connect(ctx context.Context, connString string) (DBExecutorContext, error) {
 	connConfig, err := pgxpool.ParseConfig(connString)
 	if err != nil {
 		return nil, err
@@ -29,5 +32,5 @@ func Connect(ctx context.Context, connString string) (DBExecutorContext, error) 
 		return nil, err
 	}
 	// connConfig.PreferSimpleProtocol = true
-	return NewConnecton(ctx, connConfig)
+	return pgxpool.ConnectConfig(ctx, connConfig)
 }

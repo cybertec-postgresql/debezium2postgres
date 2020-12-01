@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 
 	"github.com/cybertec-postgresql/debezium2postgres/internal/cmdparser"
 	"github.com/cybertec-postgresql/debezium2postgres/internal/kafka"
@@ -9,21 +10,19 @@ import (
 	"github.com/cybertec-postgresql/debezium2postgres/internal/postgres"
 )
 
+var osExit = os.Exit
+var initLog = log.Init
+
 func main() {
 	cmdOpts, err := cmdparser.Parse()
 	if err != nil {
-		panic(err)
+		osExit(2)
 	}
-	log := log.Init(cmdOpts.LogLevel)
+	log := initLog(cmdOpts.LogLevel)
 	log.WithField("options", cmdOpts).Debug("Starting CDC migration...")
-
-	db, err := postgres.Connect(context.Background(), cmdOpts.Postgres)
-	if err != nil {
-		log.Fatalln(err)
-	}
 
 	// create channel for passing messages to database worker
 	var msgChannel chan []byte = make(chan []byte, 16)
 	kafka.Consume(context.Background(), cmdOpts.Kafka, cmdOpts.Topic, msgChannel)
-	postgres.Apply(context.Background(), db, msgChannel)
+	postgres.Apply(context.Background(), cmdOpts.Postgres, msgChannel)
 }

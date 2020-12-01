@@ -9,9 +9,11 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Logger provides access to the Kafka specific logging facility
 var Logger *logrus.Entry
 
-func GetReader(brokers []string, topic string) *kafka.Reader {
+// getReader returns a kafka reader to consume messages from `brokers` with `topic`
+func getReader(brokers []string, topic string) *kafka.Reader {
 	return kafka.NewReader(kafka.ReaderConfig{
 		Brokers:   brokers,
 		Topic:     topic,
@@ -21,13 +23,13 @@ func GetReader(brokers []string, topic string) *kafka.Reader {
 	})
 }
 
-var NewConsumer = sarama.NewConsumer
+var newConsumer = sarama.NewConsumer
 
-func GetTopics(brokers []string) ([]string, error) {
+func getTopics(brokers []string) ([]string, error) {
 	config := sarama.NewConfig()
 	config.Consumer.Return.Errors = true
 	//get broker
-	cluster, err := NewConsumer(brokers, config)
+	cluster, err := newConsumer(brokers, config)
 	if err != nil {
 		return nil, err
 	}
@@ -38,22 +40,23 @@ func GetTopics(brokers []string) ([]string, error) {
 	return topics, err
 }
 
+// Consume function receives messages from Kafka and sends them to the `messages` channel
 func Consume(ctx context.Context, brokers []string, topicPattern string, messages chan<- []byte) {
 	Logger.Debug("Starting consuming from kafka...")
-	topics, err := GetTopics(brokers)
+	topics, err := getTopics(brokers)
 	if err != nil {
 		Logger.Fatalln(err)
 	}
 	for _, topic := range topics {
 		Logger.WithField("topic", topic).WithField("prefix", topicPattern).Debug("Checking for prefix")
 		if strings.HasPrefix(topic, topicPattern) {
-			go ConsumeTopic(context.Background(), brokers, topic, messages)
+			go consumeTopic(context.Background(), brokers, topic, messages)
 		}
 	}
 }
-func ConsumeTopic(ctx context.Context, brokers []string, topic string, messages chan<- []byte) {
+func consumeTopic(ctx context.Context, brokers []string, topic string, messages chan<- []byte) {
 	topiclogger := Logger.WithField("topic", topic)
-	reader := GetReader(brokers, topic)
+	reader := getReader(brokers, topic)
 	defer reader.Close()
 	topiclogger.Println("Starting consuming topic...")
 	for {

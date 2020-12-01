@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Init creates logging facilities for the application
 func Init(level string) *logrus.Logger {
 	ll, err := logrus.ParseLevel(level)
 	if err != nil {
