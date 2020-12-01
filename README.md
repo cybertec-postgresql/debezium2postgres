@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/cybertec-postgresql/debezium2postgres)](https://goreportcard.com/report/github.com/cybertec-postgresql/debezium2postgres)
 
 # debezium2postgres
-Application to apply CDC log from Debezium to the destination PostgreSQL
+Application to apply CDC log from [Debezium](https://debezium.io/) to the target [PostgreSQL](http://www.postgresql.org/).
 
 # use
 `$ ./debezium2postgres --kafka=10.0.0.105:9092 --topic=dbserver1.inventory --loglevel=debug --postgres=postgres://user:pwd@10.0.0.105/inventory`
