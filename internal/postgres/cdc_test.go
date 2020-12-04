@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cybertec-postgresql/debezium2postgres/internal/kafka"
 	"github.com/jackc/pgconn"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -29,19 +30,21 @@ func TestApply(t *testing.T) {
 		t.Log("log.Fatal called")
 	}
 
-	var msgChan chan []byte = make(chan []byte, 2)
-	msgChan <- []byte(`foo`)
-	msgChan <- []byte(`{
-  "schema": null,
-  "payload": {
-    "before": {
-      "id": 16
-    },
-    "after": null,
-    "source": null,
-    "op": "d"
-  }
-}`)
+	var msgChan chan kafka.Message = make(chan kafka.Message, 2)
+	msg := kafka.Message{}
+	msgChan <- msg
+	msg.Value = []byte(`{
+		"schema": null,
+		"payload": {
+			"before": {
+			"id": 16
+			},
+			"after": null,
+			"source": null,
+			"op": "d"
+		}
+	}`)
+	msgChan <- msg
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -64,25 +67,32 @@ func TestApply(t *testing.T) {
 func TestApplyCDCItem(t *testing.T) {
 	Logger = logrus.New().WithField("method", "TestApplyCDCItem")
 
-	_, err := applyCDCItem(context.Background(), MockDbExec{}, []byte(`foo`))
+	msg := kafka.Message{}
+	_, err := applyCDCItem(context.Background(), MockDbExec{}, msg)
 	assert.Error(t, err, "Invalid JSON")
 
-	_, err = applyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": null}`))
+	msg.Value = []byte(`{"payload": null}`)
+	_, err = applyCDCItem(context.Background(), MockDbExec{}, msg)
 	assert.Error(t, err, "Payload is nil")
 
-	_, err = applyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "foo"}}`))
+	msg.Value = []byte(`{"payload": {"op": "foo"}}`)
+	_, err = applyCDCItem(context.Background(), MockDbExec{}, msg)
 	assert.Error(t, err, "Unsupported operation")
 
-	_, err = applyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "c"}}`))
+	msg.Value = []byte(`{"payload": {"op": "c"}}`)
+	_, err = applyCDCItem(context.Background(), MockDbExec{}, msg)
 	assert.Error(t, err, "Payload.After is nil")
 
-	_, err = applyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "u"}}`))
+	msg.Value = []byte(`{"payload": {"op": "u"}}`)
+	_, err = applyCDCItem(context.Background(), MockDbExec{}, msg)
 	assert.Error(t, err, "Payload.After is nil")
 
-	_, err = applyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "d"}}`))
+	msg.Value = []byte(`{"payload": {"op": "d"}}`)
+	_, err = applyCDCItem(context.Background(), MockDbExec{}, msg)
 	assert.Error(t, err, "Payload.After is nil")
 
-	res, err := applyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "r"}}`))
+	msg.Value = []byte(`{"payload": {"op": "r"}}`)
+	res, err := applyCDCItem(context.Background(), MockDbExec{}, msg)
 	assert.NoError(t, err, "Payload.After is nil")
 	assert.Equal(t, int64(0), res, "ignore snapshot reading")
 }

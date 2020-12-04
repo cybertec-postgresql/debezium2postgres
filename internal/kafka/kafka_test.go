@@ -31,7 +31,7 @@ func TestGetTopics(t *testing.T) {
 	Logger.Logger.ExitFunc = func(int) {
 		t.Log("log.Fatal called")
 	}
-	Consume(ctx, []string{"foo", "bar"}, "baz", make(chan []byte, 1))
+	Consume(ctx, []string{"foo", "bar"}, "baz", make(chan Message, 1))
 
 	newConsumer = func(addrs []string, config *sarama.Config) (sarama.Consumer, error) {
 		c := mocks.NewConsumer(t, nil)
@@ -39,7 +39,7 @@ func TestGetTopics(t *testing.T) {
 		return c, nil
 	}
 	topics, err := getTopics([]string{"foo", "bar"})
-	Consume(ctx, []string{"foo", "bar"}, "foo", make(chan []byte, 1))
+	Consume(ctx, []string{"foo", "bar"}, "foo", make(chan Message, 1))
 	assert.NoError(t, err)
 	assert.Equal(t, topics, []string{"foo"})
 }
@@ -69,7 +69,7 @@ func TestConsumeTopic(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	consumeTopic(ctx, []string{"foo", "bar"}, "baz", make(chan []byte, 10))
+	consumeTopic(ctx, []string{"foo", "bar"}, "baz", make(chan Message, 10))
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -77,5 +77,5 @@ func TestConsumeTopic(t *testing.T) {
 	getReader = func(brokers []string, topic string) kafkaReader {
 		return &mockKafkaReader{}
 	}
-	consumeTopic(ctx, []string{"foo", "bar"}, "baz", make(chan []byte, 10))
+	consumeTopic(ctx, []string{"foo", "bar"}, "baz", make(chan Message, 10))
 }

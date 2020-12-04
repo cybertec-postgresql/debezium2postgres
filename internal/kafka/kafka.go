@@ -9,6 +9,11 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Message is a data structure representing kafka messages
+type Message struct {
+	kafka.Message
+}
+
 // Logger provides access to the Kafka specific logging facility
 var Logger *logrus.Entry
 
@@ -46,7 +51,7 @@ func getTopics(brokers []string) ([]string, error) {
 }
 
 // Consume function receives messages from Kafka and sends them to the `messages` channel
-func Consume(ctx context.Context, brokers []string, topicPattern string, messages chan<- []byte) {
+func Consume(ctx context.Context, brokers []string, topicPattern string, messages chan<- Message) {
 	Logger.Debug("Starting consuming from kafka...")
 	topics, err := getTopics(brokers)
 	if err != nil {
@@ -59,7 +64,7 @@ func Consume(ctx context.Context, brokers []string, topicPattern string, message
 		}
 	}
 }
-func consumeTopic(ctx context.Context, brokers []string, topic string, messages chan<- []byte) {
+func consumeTopic(ctx context.Context, brokers []string, topic string, messages chan<- Message) {
 	topiclogger := Logger.WithField("topic", topic)
 	reader := getReader(brokers, topic)
 	defer reader.Close()
@@ -71,6 +76,6 @@ func consumeTopic(ctx context.Context, brokers []string, topic string, messages 
 			return
 		}
 		topiclogger.WithField("key", string(m.Key)).WithField("value", string(m.Value)).Trace("Message consumed")
-		messages <- m.Value
+		messages <- Message{m}
 	}
 }

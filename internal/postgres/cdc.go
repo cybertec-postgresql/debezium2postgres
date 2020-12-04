@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/cybertec-postgresql/debezium2postgres/internal/kafka"
 )
 
 type cdcField struct {
@@ -45,7 +47,7 @@ type cdcMessage struct {
 }
 
 // Apply function reads messages from `messages` channel and applies changes to the target PostgreSQL database
-func Apply(ctx context.Context, connString string, messages <-chan []byte) {
+func Apply(ctx context.Context, connString string, messages <-chan kafka.Message) {
 	conn, err := Connect(context.Background(), connString)
 	if err != nil {
 		Logger.Fatalln(err)
@@ -66,9 +68,9 @@ func Apply(ctx context.Context, connString string, messages <-chan []byte) {
 	}
 }
 
-func applyCDCItem(ctx context.Context, conn DBExecutorContext, jsonData []byte) (int64, error) {
+func applyCDCItem(ctx context.Context, conn DBExecutorContext, message kafka.Message) (int64, error) {
 	var msg cdcMessage
-	if err := json.Unmarshal(jsonData, &msg); err != nil {
+	if err := json.Unmarshal(message.Value, &msg); err != nil {
 		return -1, err
 	}
 	if msg.Payload == nil {
