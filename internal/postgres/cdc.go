@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -10,41 +9,6 @@ import (
 
 	"github.com/cybertec-postgresql/debezium2postgres/internal/kafka"
 )
-
-type cdcField struct {
-	Type     string `json:"type"`
-	Optional bool   `json:"optional"`
-	Field    string `json:"field"`
-}
-
-type cdcFields struct {
-	Type     string     `json:"type"`
-	Fields   []cdcField `json:"fields,omitempty"`
-	Optional bool       `json:"optional"`
-	Name     string     `json:"name,omitempty"`
-	Field    string     `json:"field"`
-}
-
-type cdcSchema struct {
-	Type     string      `json:"type"`
-	Name     string      `json:"name"`
-	Fields   []cdcFields `json:"fields"`
-	Optional bool        `json:"optional"`
-}
-
-type cdcPayload struct {
-	Before      *map[string]interface{} `json:"before"`
-	After       *map[string]interface{} `json:"after"`
-	Source      map[string]interface{}  `json:"source"`
-	Op          string                  `json:"op"`
-	Timestamp   int64                   `json:"ts_ms"`
-	Transaction *map[string]interface{} `json:"transaction"`
-}
-
-type cdcMessage struct {
-	Schema  *cdcSchema  `json:"schema"`
-	Payload *cdcPayload `json:"payload"`
-}
 
 // Apply function reads messages from `messages` channel and applies changes to the target PostgreSQL database
 func Apply(ctx context.Context, connString string, messages <-chan kafka.Message) {
@@ -69,21 +33,14 @@ func Apply(ctx context.Context, connString string, messages <-chan kafka.Message
 }
 
 func applyCDCItem(ctx context.Context, conn DBExecutorContext, message kafka.Message) (int64, error) {
-	var msg cdcMessage
-	if err := json.Unmarshal(message.Value, &msg); err != nil {
-		return -1, err
-	}
-	if msg.Payload == nil {
-		return -1, errors.New("Payload is nil")
-	}
-	Logger.WithField("schema", msg.Schema).Trace("Schema used for applying CDC item")
-	switch msg.Payload.Op {
+	Logger.WithField("schema", string(message.Key)).Trace("Key used for applying CDC item")
+	switch message.Op {
 	case "c":
-		return insertCDCItem(ctx, conn, msg.Payload)
+		return insertCDCItem(ctx, conn, message)
 	case "u":
-		return updateCDCItem(ctx, conn, msg.Payload)
+		return updateCDCItem(ctx, conn, message)
 	case "d":
-		return deleteCDCItem(ctx, conn, msg.Payload)
+		return deleteCDCItem(ctx, conn, message)
 	case "r":
 		// ignore snapshot reading
 		return 0, nil
@@ -91,26 +48,23 @@ func applyCDCItem(ctx context.Context, conn DBExecutorContext, message kafka.Mes
 	return 0, errors.New("Unsupported operation")
 }
 
-func insertCDCItem(ctx context.Context, conn DBExecutorContext, payload *cdcPayload) (int64, error) {
+func insertCDCItem(ctx context.Context, conn DBExecutorContext, message kafka.Message) (int64, error) {
 	l := Logger.WithField("op", "insert")
-	if payload.After == nil {
-		return -1, errors.New("Payload.After is nil")
-	}
 	l.Debug("Starting InsertCDCItem()...")
-	fnumber := len(*payload.After)
+	fnumber := len(message.Values)
 	refs := make([]string, 0, fnumber)
 	for i := 1; i <= fnumber; i++ {
 		refs = append(refs, "$"+strconv.Itoa(i))
 	}
 	args := make([]interface{}, 0, fnumber)
 	fields := make([]string, len(args))
-	for f, v := range *payload.After {
+	for f, v := range message.Values {
 		l.WithField("field", f).WithField("value", v).Debug("CDC value used")
 		fields = append(fields, strconv.Quote(f))
 		args = append(args, v)
 	}
 	sql := fmt.Sprintf("INSERT INTO %s(%s) VALUES (%s)",
-		payload.Source["table"],
+		message.TableName,
 		strings.Join(fields, ","),
 		strings.Join(refs, ","))
 	ct, err := conn.Exec(ctx, sql, args...)
@@ -118,65 +72,59 @@ func insertCDCItem(ctx context.Context, conn DBExecutorContext, payload *cdcPayl
 	return ct.RowsAffected(), err
 }
 
-func updateCDCItem(ctx context.Context, conn DBExecutorContext, payload *cdcPayload) (int64, error) {
+func updateCDCItem(ctx context.Context, conn DBExecutorContext, message kafka.Message) (int64, error) {
 	l := Logger.WithField("op", "update")
-	if payload.Before == nil {
-		return -1, errors.New("Payload.Before is nil")
-	}
-	if payload.After == nil {
-		return -1, errors.New("Payload.After is nil")
-	}
 	l.Debug("Starting UpdateCDCItem()...")
-	fnumber := len(*payload.After)
-	oldrefs := make([]string, 0, fnumber)
-	newrefs := make([]string, 0, fnumber)
-	for i := 1; i <= fnumber; i++ {
-		oldrefs = append(oldrefs, "$"+strconv.Itoa(i))
-		newrefs = append(newrefs, "$"+strconv.Itoa(i+fnumber))
+	keyrefs := make([]string, 0, len(message.Keys))
+	for i := 1; i <= len(message.Keys); i++ {
+		keyrefs = append(keyrefs, "$"+strconv.Itoa(i))
 	}
-	args := make([]interface{}, 0, fnumber)
-	newargs := make([]interface{}, 0, fnumber)
-	fields := make([]string, 0, fnumber)
-	for f, v := range *payload.Before {
-		l.WithField("field", f).WithField("oldvalue", v).Debug("CDC value used")
+	keyvals := make([]interface{}, 0, len(message.Keys))
+	keyfields := make([]string, 0, len(message.Keys))
+	for f, v := range message.Keys {
+		keyfields = append(keyfields, strconv.Quote(f))
+		keyvals = append(keyvals, v)
+	}
+
+	valrefs := make([]string, 0, len(message.Values))
+	for i := 1; i <= len(message.Values); i++ {
+		valrefs = append(valrefs, "$"+strconv.Itoa(i+len(message.Keys)))
+	}
+	vals := make([]interface{}, 0, len(message.Values))
+	fields := make([]string, 0, len(message.Values))
+	for f, v := range message.Values {
 		fields = append(fields, strconv.Quote(f))
-		args = append(args, v)
-		v = (*payload.After)[f]
-		l.WithField("field", f).WithField("newvalue", v).Debug("CDC value used")
-		newargs = append(newargs, v)
+		vals = append(vals, v)
 	}
-	args = append(args, newargs...)
+	vals = append(keyvals, vals...)
 	sql := fmt.Sprintf("UPDATE %s SET (%s)=(%s) WHERE (%s)=(%s)",
-		payload.Source["table"],
+		message.TableName,
 		strings.Join(fields, ","),
-		strings.Join(newrefs, ","),
-		strings.Join(fields, ","),
-		strings.Join(oldrefs, ","))
-	ct, err := conn.Exec(ctx, sql, args...)
+		strings.Join(valrefs, ","),
+		strings.Join(keyfields, ","),
+		strings.Join(keyrefs, ","))
+	ct, err := conn.Exec(ctx, sql, vals...)
 	l.Debug("Exiting UpdateCDCItem()...")
 	return ct.RowsAffected(), err
 }
 
-func deleteCDCItem(ctx context.Context, conn DBExecutorContext, payload *cdcPayload) (int64, error) {
+func deleteCDCItem(ctx context.Context, conn DBExecutorContext, message kafka.Message) (int64, error) {
 	l := Logger.WithField("op", "delete")
-	if payload.Before == nil {
-		return -1, errors.New("Payload.Before is nil")
-	}
 	l.Debug("Starting DeleteCDCItem()...")
-	fnumber := len(*payload.Before)
+	fnumber := len(message.Keys)
 	refs := make([]string, 0, fnumber)
 	for i := 1; i <= fnumber; i++ {
 		refs = append(refs, "$"+strconv.Itoa(i))
 	}
 	args := make([]interface{}, 0, fnumber)
 	fields := make([]string, 0, fnumber)
-	for f, v := range *payload.Before {
+	for f, v := range message.Keys {
 		l.WithField("field", f).WithField("oldvalue", v).Debug("CDC value used")
 		fields = append(fields, strconv.Quote(f))
 		args = append(args, v)
 	}
 	sql := fmt.Sprintf("DELETE FROM %s WHERE (%s)=(%s)",
-		payload.Source["table"],
+		message.TableName,
 		strings.Join(fields, ","),
 		strings.Join(refs, ","))
 	ct, err := conn.Exec(ctx, sql, args...)

@@ -9,11 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Message is a data structure representing kafka messages
-type Message struct {
-	kafka.Message
-}
-
 // Logger provides access to the Kafka specific logging facility
 var Logger *logrus.Entry
 
@@ -76,6 +71,11 @@ func consumeTopic(ctx context.Context, brokers []string, topic string, messages 
 			return
 		}
 		topiclogger.WithField("key", string(m.Key)).WithField("value", string(m.Value)).Trace("Message consumed")
-		messages <- Message{m}
+		msg, err := NewMessage(m)
+		if err != nil {
+			topiclogger.Error(err)
+			continue
+		}
+		messages <- *msg
 	}
 }
