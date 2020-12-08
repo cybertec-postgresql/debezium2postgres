@@ -33,17 +33,7 @@ func TestApply(t *testing.T) {
 	var msgChan chan kafka.Message = make(chan kafka.Message, 2)
 	msg := kafka.Message{}
 	msgChan <- msg
-	msg.Value = []byte(`{
-		"schema": null,
-		"payload": {
-			"before": {
-			"id": 16
-			},
-			"after": null,
-			"source": null,
-			"op": "d"
-		}
-	}`)
+	msg.Op = "c"
 	msgChan <- msg
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
