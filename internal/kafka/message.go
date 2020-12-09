@@ -42,10 +42,11 @@ type cdcKey struct {
 // Message is a data structure representing kafka messages
 type Message struct {
 	kafka.Message
-	Op        string
-	TableName string
-	Keys      map[string]interface{}
-	Values    map[string]interface{}
+	Op         string
+	TableName  string
+	SchemaName string
+	Keys       map[string]interface{}
+	Values     map[string]interface{}
 }
 
 // NewMessage used to create and init a new message instance
@@ -92,6 +93,8 @@ func (m *Message) initValues() error {
 	for k, v := range *msg.Payload {
 		if strings.HasPrefix(k, "__") { // system fields
 			switch k {
+			case "__schema":
+				m.SchemaName = v.(string)
 			case "__table":
 				m.TableName = v.(string)
 			case "__op":
@@ -102,4 +105,14 @@ func (m *Message) initValues() error {
 		m.Values[k] = v
 	}
 	return nil
+}
+
+func (m *Message) QualifiedTablename() string {
+	quoteIdent := func(s string) string {
+		return `"` + strings.Replace(s, `"`, `""`, -1) + `"`
+	}
+	if m.SchemaName > "" {
+		return quoteIdent(m.SchemaName) + "." + quoteIdent(m.TableName)
+	}
+	return quoteIdent(m.TableName)
 }

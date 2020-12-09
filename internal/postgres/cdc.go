@@ -64,7 +64,7 @@ func insertCDCItem(ctx context.Context, conn DBExecutorContext, message kafka.Me
 		args = append(args, v)
 	}
 	sql := fmt.Sprintf("INSERT INTO %s(%s) VALUES (%s)",
-		message.TableName,
+		message.QualifiedTablename(),
 		strings.Join(fields, ","),
 		strings.Join(refs, ","))
 	ct, err := conn.Exec(ctx, sql, args...)
@@ -98,7 +98,7 @@ func updateCDCItem(ctx context.Context, conn DBExecutorContext, message kafka.Me
 	}
 	vals = append(keyvals, vals...)
 	sql := fmt.Sprintf("UPDATE %s SET (%s)=(%s) WHERE (%s)=(%s)",
-		message.TableName,
+		message.QualifiedTablename(),
 		strings.Join(fields, ","),
 		strings.Join(valrefs, ","),
 		strings.Join(keyfields, ","),
@@ -124,7 +124,7 @@ func deleteCDCItem(ctx context.Context, conn DBExecutorContext, message kafka.Me
 		args = append(args, v)
 	}
 	sql := fmt.Sprintf("DELETE FROM %s WHERE (%s)=(%s)",
-		message.TableName,
+		message.QualifiedTablename(),
 		strings.Join(fields, ","),
 		strings.Join(refs, ","))
 	ct, err := conn.Exec(ctx, sql, args...)
