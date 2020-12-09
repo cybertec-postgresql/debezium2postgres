@@ -9,6 +9,11 @@
         "database.password": "postgres",
         "database.dbname": "postgres",
         "database.server.name": "dbserver1",
-        "schema.whitelist": "inventory"
+        "schema.whitelist": "inventory",
+        "transforms": "unwrap",
+        "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+        "transforms.unwrap.drop.tombstones": false,
+        "transforms.unwrap.delete.handling.mode": "rewrite",
+        "transforms.unwrap.add.fields": "source.ts_ms,db,schema,table,op"        
     }
 }
