@@ -14,3 +14,30 @@ Application to apply CDC log from [Debezium](https://debezium.io/) to the target
 - `postgres` - PostgreSQL connection URL
 
 :warning: To connect to `kafka` cluster the `advertised.listeners` option should be configured properly. See more https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc/
+
+# tutorial
+
+```bash
+# We will the topology as defined in https://debezium.io/docs/tutorial/
+export DEBEZIUM_VERSION=1.3
+export DEBEZIUM_EXTERNAL_IP=10.0.0.105
+docker-compose -f docker-compose.yml up
+
+# Start MySQL connector
+curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:8083/connectors/ -d @inventory-connector.json
+
+# Check messages from a Debezium topic for table `inventory.customers`
+docker-compose -f docker-compose-mysql.yaml exec kafka /kafka/bin/kafka-console-consumer.sh \
+    --bootstrap-server kafka:9092 \
+    --from-beginning \
+    --property print.key=true \
+    --topic dbserver1.inventory.customers
+
+# Modify records in the database via MySQL client and check the output in Debezium
+docker-compose -f docker-compose-mysql.yaml exec mysql bash -c 'mysql -u $MYSQL_USER -p$MYSQL_PASSWORD inventory'
+
+# Run debezium2postgres transformation
+debezium2postgres --kafka=$DEBEZIUM_EXTERNAL_IP:9092 --topic=dbserver1.inventory --loglevel=debug --postgres=postgres://user:pwd@10.0.0.105/inventory
+
+# Shut down the cluster
+docker-compose -f docker-compose-mysql.yaml down

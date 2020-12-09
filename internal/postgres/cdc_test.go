@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cybertec-postgresql/debezium2postgres/internal/kafka"
 	"github.com/jackc/pgconn"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -29,19 +30,11 @@ func TestApply(t *testing.T) {
 		t.Log("log.Fatal called")
 	}
 
-	var msgChan chan []byte = make(chan []byte, 2)
-	msgChan <- []byte(`foo`)
-	msgChan <- []byte(`{
-  "schema": null,
-  "payload": {
-    "before": {
-      "id": 16
-    },
-    "after": null,
-    "source": null,
-    "op": "d"
-  }
-}`)
+	var msgChan chan kafka.Message = make(chan kafka.Message, 2)
+	msg := kafka.Message{}
+	msgChan <- msg
+	msg.Op = "c"
+	msgChan <- msg
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -64,65 +57,64 @@ func TestApply(t *testing.T) {
 func TestApplyCDCItem(t *testing.T) {
 	Logger = logrus.New().WithField("method", "TestApplyCDCItem")
 
-	_, err := applyCDCItem(context.Background(), MockDbExec{}, []byte(`foo`))
+	msg := kafka.Message{}
+	_, err := applyCDCItem(context.Background(), MockDbExec{}, msg)
 	assert.Error(t, err, "Invalid JSON")
 
-	_, err = applyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": null}`))
-	assert.Error(t, err, "Payload is nil")
-
-	_, err = applyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "foo"}}`))
+	msg.Op = "foo"
+	_, err = applyCDCItem(context.Background(), MockDbExec{}, msg)
 	assert.Error(t, err, "Unsupported operation")
 
-	_, err = applyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "c"}}`))
-	assert.Error(t, err, "Payload.After is nil")
+	msg.Op = "c"
+	_, err = applyCDCItem(context.Background(), MockDbExec{}, msg)
+	assert.NoError(t, err)
 
-	_, err = applyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "u"}}`))
-	assert.Error(t, err, "Payload.After is nil")
+	msg.Op = "u"
+	_, err = applyCDCItem(context.Background(), MockDbExec{}, msg)
+	assert.NoError(t, err)
 
-	_, err = applyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "d"}}`))
-	assert.Error(t, err, "Payload.After is nil")
+	msg.Op = "d"
+	_, err = applyCDCItem(context.Background(), MockDbExec{}, msg)
+	assert.NoError(t, err)
 
-	res, err := applyCDCItem(context.Background(), MockDbExec{}, []byte(`{"payload": {"op": "r"}}`))
-	assert.NoError(t, err, "Payload.After is nil")
+	msg.Op = "r"
+	res, err := applyCDCItem(context.Background(), MockDbExec{}, msg)
+	assert.NoError(t, err)
 	assert.Equal(t, int64(0), res, "ignore snapshot reading")
 }
 
 func TestInsertCDCItem(t *testing.T) {
 	Logger = logrus.New().WithField("method", "TestInsertCDCItem")
-
-	_, err := insertCDCItem(context.Background(), MockDbExec{}, &cdcPayload{})
-	assert.Error(t, err, "Payload.After is nil")
-
-	_, err = insertCDCItem(context.Background(), MockDbExec{},
-		&cdcPayload{After: &map[string]interface{}{"field1": "value1", "field2": "value2"}})
+	msg := kafka.Message{
+		Keys:   make(map[string]interface{}),
+		Values: make(map[string]interface{}),
+	}
+	msg.Keys["foo"] = "bar"
+	msg.Values["foo"] = "baz"
+	_, err := insertCDCItem(context.Background(), MockDbExec{}, msg)
 	assert.NoError(t, err)
 }
 
 func TestUpdateCDCItem(t *testing.T) {
 	Logger = logrus.New().WithField("method", "TestUpdateCDCItem")
-
-	_, err := updateCDCItem(context.Background(), MockDbExec{}, &cdcPayload{})
-	assert.Error(t, err, "Payload.Before is nil")
-
-	_, err = updateCDCItem(context.Background(), MockDbExec{},
-		&cdcPayload{Before: &map[string]interface{}{"field1": "value1", "field2": "value2"}})
-	assert.Error(t, err, "Payload.After is nil")
-
-	_, err = updateCDCItem(context.Background(), MockDbExec{},
-		&cdcPayload{
-			After:  &map[string]interface{}{"field1": "value1", "field2": "value2"},
-			Before: &map[string]interface{}{"field1": "value1", "field2": "value2"},
-		})
+	msg := kafka.Message{
+		Keys:   make(map[string]interface{}),
+		Values: make(map[string]interface{}),
+	}
+	msg.Keys["foo"] = "bar"
+	msg.Values["foo"] = "baz"
+	_, err := updateCDCItem(context.Background(), MockDbExec{}, msg)
 	assert.NoError(t, err)
 }
 
 func TestDeleteCDCItem(t *testing.T) {
 	Logger = logrus.New().WithField("method", "TestDeleteCDCItem")
-
-	_, err := deleteCDCItem(context.Background(), MockDbExec{}, &cdcPayload{})
-	assert.Error(t, err, "Payload.Before is nil")
-
-	_, err = deleteCDCItem(context.Background(), MockDbExec{},
-		&cdcPayload{Before: &map[string]interface{}{"field1": "value1", "field2": "value2"}})
+	msg := kafka.Message{
+		Keys:   make(map[string]interface{}),
+		Values: make(map[string]interface{}),
+	}
+	msg.Keys["foo"] = "bar"
+	msg.Values["foo"] = "baz"
+	_, err := deleteCDCItem(context.Background(), MockDbExec{}, msg)
 	assert.NoError(t, err)
 }
