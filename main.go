@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"time"
 
 	"github.com/cybertec-postgresql/debezium2postgres/internal/cmdparser"
 	"github.com/cybertec-postgresql/debezium2postgres/internal/kafka"
@@ -24,5 +25,5 @@ func main() {
 	// create channel for passing messages to database worker
 	var msgChannel chan kafka.Message = make(chan kafka.Message, 16)
 	kafka.Consume(context.Background(), cmdOpts.Kafka, cmdOpts.Topic, msgChannel)
-	postgres.Apply(context.Background(), cmdOpts.Postgres, msgChannel)
+	postgres.Apply(context.Background(), cmdOpts.Postgres, time.Duration(cmdOpts.Timeout)*time.Second, msgChannel)
 }

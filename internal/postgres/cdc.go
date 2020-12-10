@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cybertec-postgresql/debezium2postgres/internal/kafka"
 )
 
 // Apply function reads messages from `messages` channel and applies changes to the target PostgreSQL database
-func Apply(ctx context.Context, connString string, messages <-chan kafka.Message) {
+func Apply(ctx context.Context, connString string, idleTimeout time.Duration, messages <-chan kafka.Message) {
 	conn, err := Connect(context.Background(), connString)
 	if err != nil {
 		Logger.Fatalln(err)
@@ -27,6 +28,9 @@ func Apply(ctx context.Context, connString string, messages <-chan kafka.Message
 				Logger.Warning("CDC item caused no changes")
 			}
 		case <-ctx.Done():
+			return
+		case <-time.After(idleTimeout):
+			Logger.Print("Idle timeout exceeded")
 			return
 		}
 	}

@@ -12,6 +12,7 @@ type CmdOptions struct {
 	Postgres string   `long:"postgres" description:"PostgreSQL connection string" env:"DBZ2PG_PGURL"`
 	Kafka    []string `long:"kafka" description:"Kafka connection string" env:"DBZ2PG_KAFKA"`
 	Topic    string   `long:"topic" description:"Topic name (or prefix of the topic name) to consume" env:"DBZ2PG_TOPIC" required:"True"`
+	Timeout  int      `long:"timeout" default:"10" description:"Idle timeout for consuming kafka messages" env:"DBZ2PG_TIMEOUT"`
 }
 
 // Parse will parse command line arguments and initialize pgengine

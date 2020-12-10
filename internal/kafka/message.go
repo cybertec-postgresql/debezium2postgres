@@ -59,10 +59,12 @@ func NewMessage(msg kafka.Message) (*Message, error) {
 	}
 	err = message.initKeys()
 	if err != nil {
+		Logger.WithError(err).Debug("initKeys failed")
 		return nil, err
 	}
 	err = message.initValues()
 	if err != nil {
+		Logger.WithError(err).Debug("initValues failed")
 		return nil, err
 	}
 	return message, nil

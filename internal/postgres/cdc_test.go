@@ -42,7 +42,7 @@ func TestApply(t *testing.T) {
 	Connect = func(ctx context.Context, connString string) (DBExecutorContext, error) {
 		return nil, errors.New("bad connection")
 	}
-	Apply(ctx, "foo", msgChan)
+	Apply(ctx, "foo", time.Second, msgChan)
 
 	Connect = func(ctx context.Context, connString string) (DBExecutorContext, error) {
 		return &MockDbExec{
@@ -51,7 +51,7 @@ func TestApply(t *testing.T) {
 			},
 		}, nil
 	}
-	Apply(ctx, "foo", msgChan)
+	Apply(ctx, "foo", time.Second, msgChan)
 }
 
 func TestApplyCDCItem(t *testing.T) {
