@@ -22,6 +22,7 @@ func Apply(ctx context.Context, connString string, idleTimeout time.Duration, me
 		Logger.Fatalln(err)
 		return
 	}
+	ticker := time.NewTicker(5 * time.Second)
 	for {
 		select {
 		case m := <-messages:
@@ -36,7 +37,7 @@ func Apply(ctx context.Context, connString string, idleTimeout time.Duration, me
 		case <-time.After(idleTimeout):
 			Logger.Print("Idle timeout exceeded")
 			return
-		case <-time.After(5 * time.Second):
+		case <-ticker.C:
 			Logger.WithField("transactions", tx).Print("Transactions processed...")
 		}
 	}
