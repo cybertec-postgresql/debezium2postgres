@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/cybertec-postgresql/debezium2postgres/internal/kafka"
 )
+
+// trancsation number applied to the target PostgreSQL during session
+var tx uint64
 
 // Apply function reads messages from `messages` channel and applies changes to the target PostgreSQL database
 func Apply(ctx context.Context, connString string, idleTimeout time.Duration, messages <-chan kafka.Message) {
@@ -32,6 +36,8 @@ func Apply(ctx context.Context, connString string, idleTimeout time.Duration, me
 		case <-time.After(idleTimeout):
 			Logger.Print("Idle timeout exceeded")
 			return
+		case <-time.After(5 * time.Second):
+			Logger.WithField("transactions", tx).Print("Transactions processed...")
 		}
 	}
 }
@@ -73,6 +79,7 @@ func insertCDCItem(ctx context.Context, conn DBExecutorContext, message kafka.Me
 		strings.Join(refs, ","))
 	ct, err := conn.Exec(ctx, sql, args...)
 	l.Debug("Exiting InsertCDCItem()...")
+	atomic.AddUint64(&tx, 1)
 	return ct.RowsAffected(), err
 }
 
@@ -109,6 +116,7 @@ func updateCDCItem(ctx context.Context, conn DBExecutorContext, message kafka.Me
 		strings.Join(keyrefs, ","))
 	ct, err := conn.Exec(ctx, sql, vals...)
 	l.Debug("Exiting UpdateCDCItem()...")
+	atomic.AddUint64(&tx, 1)
 	return ct.RowsAffected(), err
 }
 
@@ -133,5 +141,6 @@ func deleteCDCItem(ctx context.Context, conn DBExecutorContext, message kafka.Me
 		strings.Join(refs, ","))
 	ct, err := conn.Exec(ctx, sql, args...)
 	l.Debug("Exiting DeleteCDCItem()...")
+	atomic.AddUint64(&tx, 1)
 	return ct.RowsAffected(), err
 }
